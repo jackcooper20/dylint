@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use regex::Regex;
@@ -64,7 +64,7 @@ fn generate_expected_readme(examples_dir: &Path, categories: &[&str]) -> String 
         // Get the examples for this category
         let examples = collect_examples_from_category(examples_dir, category);
         for (name, description) in examples {
-            write!(content, "| [`{name}`](./{category}/{name}) | {description} |\n").unwrap();
+            writeln!(content, "| [`{name}`](./{category}/{name}) | {description} |").unwrap();
         }
     }
     
@@ -131,7 +131,7 @@ fn collect_examples_from_category(examples_dir: &Path, category: &str) -> Vec<(S
     
     if category == "restriction" {
         // Handle restriction directory differently since it seems to have directories with slashes in names
-        for entry in std::fs::read_dir(&category_dir).unwrap() {
+        for entry in fs::read_dir(&category_dir).unwrap() {
             let entry = entry.unwrap();
             let metadata = entry.metadata().unwrap();
             if metadata.is_dir() {
@@ -218,9 +218,8 @@ fn capitalize(s: &str) -> String {
     }
 }
 
-// The abs_home_path lint seems to be specific to the CI environment
-// For local development, we'll only use this attribute in the CI environment
-#[cfg_attr(not(test), allow(abs_home_path))]
+#[allow(unknown_lints)]
+#[allow(abs_home_path)]
 fn find_examples_dir() -> PathBuf {
     // Try to find the examples directory relative to the current file
     let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
