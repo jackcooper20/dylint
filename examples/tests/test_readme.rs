@@ -1,4 +1,4 @@
-use std::fs::{self, File};
+use std::fs::{File, read_dir};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use regex::Regex;
@@ -125,13 +125,15 @@ fn normalize_for_comparison(s: &str) -> String {
         .to_string()
 }
 
+#[allow(unknown_lints)]
+#[allow(inconsistent_qualification)]
 fn collect_examples_from_category(examples_dir: &Path, category: &str) -> Vec<(String, String)> {
     let mut examples = Vec::new();
     let category_dir = examples_dir.join(category);
     
     if category == "restriction" {
         // Handle restriction directory differently since it seems to have directories with slashes in names
-        for entry in fs::read_dir(&category_dir).unwrap() {
+        for entry in read_dir(&category_dir).unwrap() {
             let entry = entry.unwrap();
             let metadata = entry.metadata().unwrap();
             if metadata.is_dir() {
