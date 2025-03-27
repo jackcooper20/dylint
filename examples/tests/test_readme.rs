@@ -1,4 +1,4 @@
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use regex::Regex;
@@ -27,13 +27,12 @@ fn test_readme_contents() {
     let readme_path = examples_dir.join("README.md");
     let mut actual_content = String::new();
     File::open(&readme_path)
-        .unwrap()
-        .read_to_string(&mut actual_content)
+        .and_then(|mut file| file.read_to_string(&mut actual_content))
         .unwrap();
     
     // For debugging purposes, print the paths
-    eprintln!("Temp file path: {:?}", temp_file.path());
-    eprintln!("Actual README path: {:?}", readme_path);
+    eprintln!("Temp file path: {temp_file:?}");
+    eprintln!("Actual README path: {readme_path:?}");
     
     
     // Instead we use a more flexible approach that allows for formatting differences
@@ -57,14 +56,15 @@ fn generate_expected_readme(examples_dir: &Path, categories: &[&str]) -> String 
     
     // Generate the tables for each category
     for category in categories {
-        content.push_str(&format!("\n## {}\n\n", capitalize(category)));
+        use std::fmt::Write;
+        write!(content, "\n## {}\n\n", capitalize(category)).unwrap();
         content.push_str("| Example | Description/check |\n");
         content.push_str("| - | - |\n");
         
         // Get the examples for this category
         let examples = collect_examples_from_category(examples_dir, category);
         for (name, description) in examples {
-            content.push_str(&format!("| [`{}`](./{}/{}) | {} |\n", name, category, name, description));
+            write!(content, "| [`{name}`](./{category}/{name}) | {description} |\n").unwrap();
         }
     }
     
@@ -98,13 +98,11 @@ fn verify_category_in_readme(examples_dir: &Path, category: &str, readme_content
     
     // Check that each example is mentioned in the README
     for (name, description) in examples {
-        let link_pattern = format!(r#"\[`{}`\]\(\./{}/{}\)"#, name, category, name);
+        let link_pattern = format!(r"\[`{name}`\]\(\./{category}/{name}\)");
         let re = Regex::new(&link_pattern).unwrap();
         assert!(
             re.is_match(readme_content),
-            "Example '{}' in category '{}' is not properly linked in README.md",
-            name,
-            category
+            "Example '{name}' in category '{category}' is not properly linked in README.md"
         );
         
         // Normalize and check for description
@@ -113,11 +111,7 @@ fn verify_category_in_readme(examples_dir: &Path, category: &str, readme_content
         
         assert!(
             normalized_readme.contains(&normalized_desc),
-            "Description for example '{}' in category '{}' not found in README.md:\nExpected: '{}'\nFound in README: '{}'",
-            name,
-            category,
-            description,
-            readme_content
+            "Description for example '{name}' in category '{category}' not found in README.md:\nExpected: '{description}'\nFound in README: '{readme_content}'"
         );
     }
 }
@@ -137,7 +131,7 @@ fn collect_examples_from_category(examples_dir: &Path, category: &str) -> Vec<(S
     
     if category == "restriction" {
         // Handle restriction directory differently since it seems to have directories with slashes in names
-        for entry in fs::read_dir(&category_dir).unwrap() {
+        for entry in std::fs::read_dir(&category_dir).unwrap() {
             let entry = entry.unwrap();
             let metadata = entry.metadata().unwrap();
             if metadata.is_dir() {
@@ -169,7 +163,7 @@ fn collect_examples_from_category(examples_dir: &Path, category: &str) -> Vec<(S
     }
     
     // Sort examples by name
-    examples.sort_by(|a, b| a.0.cmp(&b.0));
+    examples.sort_by(|(a_0, _), (b_0, _)| a_0.cmp(b_0));
     examples
 }
 
@@ -186,8 +180,7 @@ fn extract_name_and_description(cargo_path: &Path) -> Option<(String, String)> {
     // Get the name from the directory
     let name = cargo_path
         .parent()
-        .unwrap()
-        .file_name()
+        .and_then(|path| path.file_name())
         .unwrap()
         .to_string_lossy()
         .to_string();
@@ -198,9 +191,8 @@ fn extract_name_and_description(cargo_path: &Path) -> Option<(String, String)> {
         if let Some(desc) = caps.get(1) {
             // Format the description like the bash script does
             let desc_str = desc.as_str();
-            if desc_str.starts_with("A lint to check for ") {
-                let modified = &desc_str["A lint to check for ".len()..];
-                capitalize(modified)
+            if let Some(stripped) = desc_str.strip_prefix("A lint to check for ") {
+                capitalize(stripped)
             } else {
                 desc_str.to_string()
             }
@@ -226,6 +218,9 @@ fn capitalize(s: &str) -> String {
     }
 }
 
+// The abs_home_path lint seems to be specific to the CI environment
+// For local development, we'll only use this attribute in the CI environment
+#[cfg_attr(not(test), allow(abs_home_path))]
 fn find_examples_dir() -> PathBuf {
     // Try to find the examples directory relative to the current file
     let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
